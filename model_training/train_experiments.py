@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import joblib
+import mlflow
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -19,6 +20,7 @@ EXPERIMENTS = (
     {"fit_intercept": True, "positive": True},
 )
 ARTIFACT_PATH = Path("artifacts/best_model.joblib")
+EXPERIMENT_NAME = "Training_Experiments"
 
 
 def run_experiments(
@@ -50,6 +52,16 @@ def run_experiments(
             **metrics,
         }
         results.append(result)
+
+        with mlflow.start_run(run_name=f"Experiment_{experiment_number}"):
+            mlflow.log_params(parameters)
+            mlflow.log_metrics(
+                {
+                    "test_mean_squared_error": metrics["test_mean_squared_error"],
+                    "test_r_squared": metrics["test_r_squared"],
+                }
+            )
+            mlflow.set_tag("experiment_number", experiment_number)
 
         print(f"\n--- Experiment {experiment_number} ---")
         print(f"parameters: {json.dumps(result['parameters'], sort_keys=True)}")
@@ -89,6 +101,15 @@ def train_best_model(
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(artifact, artifact_path)
 
+    with mlflow.start_run(run_name="Best_Model"):
+        mlflow.log_params(parameters)
+        mlflow.log_metric(
+            "test_mean_squared_error",
+            float(best_experiment["test_mean_squared_error"]),
+        )
+        mlflow.log_metric("feature_count", len(X.columns))
+        mlflow.log_artifact(str(artifact_path), artifact_path="model")
+
     print(
         "Selected parameters: "
         f"{json.dumps(artifact['parameters'], sort_keys=True)} "
@@ -100,6 +121,7 @@ def train_best_model(
 
 def main() -> None:
     np.random.seed(42)
+    mlflow.set_experiment(EXPERIMENT_NAME)
 
     tips = sns.load_dataset("tips")
     df = pd.get_dummies(tips, drop_first=True)

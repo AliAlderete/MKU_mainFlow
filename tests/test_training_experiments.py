@@ -12,7 +12,11 @@ from model_training.train_experiments import run_experiments, train_best_model
 def mlflow_tracking_store(tmp_path):
     tracking_uri = mlflow.get_tracking_uri()
     mlflow.set_tracking_uri(f"sqlite:///{tmp_path / 'mlflow.db'}")
-    mlflow.set_experiment("Training_Experiments_Tests")
+    mlflow.create_experiment(
+        "Training_Experiments",
+        artifact_location=str(tmp_path / "artifacts"),
+    )
+    mlflow.set_experiment("Training_Experiments")
     yield
     mlflow.flush_trace_async_logging()
     mlflow.set_tracking_uri(tracking_uri)
@@ -42,8 +46,11 @@ def test_run_experiments_tracks_parameters_and_metrics(capsys):
         "run_experiments_test",
     )
     output = capsys.readouterr().out
+    logged_runs = mlflow.search_runs(experiment_names=["Training_Experiments"])
 
     assert len(results) == 3
+    assert len(logged_runs) == 3
+    assert logged_runs["metrics.test_mean_squared_error"].notna().all()
     assert results[0]["parameters"] == {
         "fit_intercept": True,
         "positive": False,
@@ -78,7 +85,11 @@ def test_train_best_model_saves_the_lowest_mse_model(tmp_path):
     )
 
     artifact = joblib.load(artifact_path)
+    logged_runs = mlflow.search_runs(experiment_names=["Training_Experiments"])
     assert artifact_summary["parameters"] == artifact["parameters"]
+    assert len(logged_runs) == 1
+    assert logged_runs.iloc[0]["tags.mlflow.runName"] == "Best_Model"
+    assert logged_runs.iloc[0]["metrics.feature_count"] == 1
     assert artifact_summary["feature_columns"] == artifact["feature_columns"]
     assert artifact["parameters"] == {
         "fit_intercept": False,

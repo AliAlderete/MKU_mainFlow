@@ -9,10 +9,22 @@ Run the parameter experiments with:
 python -m model_training.train_experiments
 ```
 
+Each experiment and the selected best model are logged to the
+`Training_Experiments` MLflow experiment. By default, MLflow stores local runs
+in `./mlruns`. To use a SQLite tracking database instead, point both the
+training command and UI at the same database:
+
+```bash
+export MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+python -m model_training.train_experiments
+mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
+
 The script uses the same Seaborn `tips` data and preprocessing pipeline as
 `starter/baseline_model.py`. It compares linear regression with different
 intercept and positivity settings, printing each experiment's settings,
-learned coefficients, and test metrics.
+learned coefficients, and test metrics. Runs include the experiment
+parameters, test metrics, and a saved model artifact for the selected model.
 
 On pushes that change the training code or its dependencies, the
 `Model Training Artifact` workflow selects the parameters with the lowest test

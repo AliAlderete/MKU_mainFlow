@@ -11,6 +11,14 @@
         "/^python -m pytest tests/test_monitor\\.py -q$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^ls -la && printf '\\\\nmodel_training:\\\\n' && ls -la model_training && printf '\\\\ntests:\\\\n' && ls -la tests$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -m pytest tests/test_training_experiments\\.py -v$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
