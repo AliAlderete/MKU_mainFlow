@@ -6,3 +6,4 @@ pandas
 matplotlib
 statsmodels
 pytest
+mlflow

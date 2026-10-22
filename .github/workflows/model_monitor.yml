@@ -1,0 +1,91 @@
+name: Production Model Monitoring
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      inference_file:
+        description: CSV containing production labels and predictions
+        required: false
+        default: data/daily_production_inferences.csv
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Evaluate production inferences
+        id: evaluation
+        env:
+          MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI || 'sqlite:///mlflow.db' }}
+          INFERENCE_FILE: ${{ inputs.inference_file || 'data/daily_production_inferences.csv' }}
+        run: |
+          python -m model_training.monitor \
+            --data "$INFERENCE_FILE" \
+            --baseline data/reference_baseline.csv
+
+      - name: Upload local MLflow run data
+        if: always() && !vars.MLFLOW_TRACKING_URI
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-monitoring-runs
+          path: |
+            mlflow.db
+            mlartifacts
+          if-no-files-found: ignore
+
+      - name: Create monitoring alert issue
+        if: failure() && steps.evaluation.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Fraud model monitoring failed (${context.runNumber})`;
+            const body = [
+              `The production model monitoring workflow failed.`,
+              ``,
+              `- Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              `- Commit: ${context.sha}`,
+              ``,
+              `Review the MLflow run and production inference data before retraining.`
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body
+            });
+
+      - name: Dispatch retraining event
+        if: failure() && steps.evaluation.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.RETRAINING_DISPATCH_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "RETRAINING_DISPATCH_TOKEN is not configured; skipping retraining dispatch."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPOSITORY}/dispatches" \
+            --data "{\"event_type\":\"fraud-model-drift\",\"client_payload\":{\"sha\":\"${COMMIT_SHA}\"}}"

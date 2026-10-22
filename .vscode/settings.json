@@ -1,0 +1,16 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^python -m pip show mlflow pytest scikit-learn$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"import inspect, mlflow; print\\(inspect\\.signature\\(mlflow\\.models\\.evaluate\\)\\); print\\(mlflow\\.__version__\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -m pytest tests/test_monitor\\.py -q$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
